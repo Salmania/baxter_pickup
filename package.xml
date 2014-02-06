@@ -1,16 +1,12 @@
 <package>
-  <name>baxter_barcode_pickup</name>
+  <name>baxter_pickup</name>
   <version>0.0.1</version>
-  <description>The baxter barcoded test tube manipulation package</description>
+  <description>The baxter test tube manipulation package</description>
 
   <maintainer email="peter.jeffris@colorado.edu">Peter</maintainer>
-  <maintainer email="derek.gann@colorado.edu">Derek</maintainer>
   <maintainer email="clark.matthew8@gmail.com">Matt</maintainer>
-  <maintainer email="howead@colorado.edu">Andrew</maintainer>
   
   <license>LGPLv3</license>
-
-  <url type="repository">https://github.com/st3am/baxter_barcode_pickup</url>
 
   <buildtool_depend>catkin</buildtool_depend>
 

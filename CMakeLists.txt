@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 2.8.3)
-project(baxter_barcode_pickup)
+project(baxter_pickup)
 
 find_package(catkin REQUIRED COMPONENTS
   moveit_core
