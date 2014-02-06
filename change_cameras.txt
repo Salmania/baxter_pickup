@@ -1,0 +1,2 @@
+rosservice call /cameras/close "name: 'head_camera'" 
+rosservice call /cameras/open "name: 'right_hand_camera'"
