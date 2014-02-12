@@ -1,5 +1,10 @@
 #include <ros/ros.h>
+#include <baxter_core_msgs/EndEffectorCommand.h>
+#include <baxter_core_msgs/EndEffectorProperties.h>
+#include <baxter_core_msgs/EndEffectorState.h>
 #include <moveit/move_group_interface/move_group.h>
+#include <moveit/planning_scene_monitor/planning_scene_monitor.h>
+#include <shape_tools/solid_primitive_dims.h>
 #include <geometry_msgs/Pose.h>
 #include <image_transport/image_transport.h>
 #include <cv_bridge/cv_bridge.h>
@@ -8,8 +13,6 @@
 #include <opencv2/highgui/highgui.hpp>
 #include <tf/transform_listener.h>
 #include <iostream>
-//#include <baxter_core_msgs/EndEffe
-//#include <baxter_gripper_server/electric_parallel_gripper.h>
 
 class VisualServo
 {
@@ -18,21 +21,25 @@ private:
   image_transport::ImageTransport transporter_;
   image_transport::Subscriber camera_image_sub_;
   image_transport::Publisher filter_pub_;
+  ros::Publisher collision_object_pub_;
+  ros::Publisher gripper_pub_;
   boost::scoped_ptr<move_group_interface::MoveGroup> move_group_;
   std::string arm_;
   std::string planning_group_name_;
   std::string hand_camera_;
   std::string camera_image_;
+  moveit_msgs::CollisionObject collision_object_;
+  baxter_core_msgs::EndEffectorCommand gripper_cmd_;
+
+  double error_y_;
+  double error_x_;
+
   tf::StampedTransform target_;
   std::vector<double> last_rpy_;
   std::vector<double> next_rpy_;
   tf::TransformListener tf_listener_;
   tf::StampedTransform tf_transform_;
   geometry_msgs::PoseStamped pose;
-  bool reset;
-  //rostopic  /robot/end_effector/right_gripper/command baxter_core_msgs/EndEffectorCommand '{id: 65664, command: "grip", args: "", sender: "", sequence: 1}'
-
-
 
 public:
   VisualServo() : transporter_(node_),  
@@ -40,59 +47,100 @@ public:
 		  planning_group_name_(arm_+"_arm"),
 		  hand_camera_(arm_+"_hand_camera"),
 		  camera_image_("/cameras/"+hand_camera_+"/image")
-		  //		  right_gripper("baxter_right_gripper_action/gripper_action","right", false)
-		  
   {
-    // move_group_.reset(new move_group_interface::MoveGroup(planning_group_name_));
-    // move_group_->setPlanningTime(20.0);
-    // move_group_->setPlannerId("KPIECEkConfigDefault");
+    move_group_.reset(new move_group_interface::MoveGroup(planning_group_name_));
+    move_group_->setPlanningTime(20.0);
+    move_group_->setPlannerId("KPIECEkConfigDefault");
     filter_pub_ = transporter_.advertise("Filter", 1);
     camera_image_sub_ = transporter_.subscribe(camera_image_, 1, &VisualServo::tracker, this);
-    cv::namedWindow("Cap Image");
-    cv::namedWindow("Tube Image");
-    // pose.header.frame_id = "base";  	
-    // pose.pose.position.x = 0.4;
-    // pose.pose.position.y = 0.2;
-    // pose.pose.position.z = 0.35;
-    // pose.pose.orientation.x = 1;
-    // pose.pose.orientation.y = 0;
-    // pose.pose.orientation.z = 0;
-    // pose.pose.orientation.w = 0.0274;
-    // move_group_->setPoseTarget(pose,"right_wrist");
-    // move_group_->move();
-    // move_group_->move();
-    // z_height = 0.4;
 
-    // ROS_INFO_STREAM("WTF???\N");
-    // right_gripper.openGripper();
-    // ros::Duration(2.0).sleep();
-    // right_gripper.closeGripper();
-    // ros::Duration(2.0).sleep();
-    // right_gripper.openGripper();
-    // ros::Duration(2.0).sleep();
-    // right_gripper.closeGripper();
-    // ROS_INFO_STREAM("HUMM???\N");
-    while(ros::ok())
-      {
-    //	servo_to_tag();
-      }
+    collision_object_pub_ = node_.advertise<moveit_msgs::CollisionObject>("collision_object_", 10);
+    collision_object_.operation = moveit_msgs::CollisionObject::ADD;
+    collision_object_.primitives.resize(1);
+    collision_object_.primitives[0].type = shape_msgs::SolidPrimitive::BOX;
+    collision_object_.primitives[0].dimensions.resize(shape_tools::SolidPrimitiveDimCount<shape_msgs::SolidPrimitive::BOX>::value);
+    collision_object_.primitives[0].dimensions[shape_msgs::SolidPrimitive::BOX_X] = 0.8382;
+    collision_object_.primitives[0].dimensions[shape_msgs::SolidPrimitive::BOX_Y] = 0.8382;
+    collision_object_.primitives[0].dimensions[shape_msgs::SolidPrimitive::BOX_Z] = 0.7112;
+    collision_object_.primitive_poses.resize(1);
+    collision_object_.primitive_poses[0].position.x = 0.7;
+    collision_object_.primitive_poses[0].position.y = -0.3556;
+    collision_object_.primitive_poses[0].position.z = 0.7112;
+    collision_object_.primitive_poses[0].orientation.w = 1.0;
+    collision_object_pub_.publish(collision_object_);
+
+    gripper_pub_ = node_.advertise<baxter_core_msgs::EndEffectorCommand>("/robot/end_effector/right_gripper/command",10);
+    gripper_cmd_.id = 65664;
+    gripper_cmd_.command = baxter_core_msgs::EndEffectorCommand::CMD_RELEASE;
+    gripper_pub_.publish(gripper_cmd_);
+    ros::Duration(2).sleep();
+
+    //at bottom:
+    //Translation: [0.656, -0.082, -0.056]
+    //Rotation: in Quaternion [0.765, 0.644, 0.017, 0.019]
+    //          in RPY [3.091, -0.001, 1.400]
+
+    //at top:
+    // Translation: [0.548, -0.080, 0.504]
+    // Rotation: in Quaternion [0.733, 0.679, 0.024, 0.022]
+    //        in RPY [3.077, -0.006, 1.494]
+
+
+    goto_home();
+    pick_up();
+    while(ros::ok()){
+    }
   }
 
+  void goto_home()
+  {
+    move_group_->setPlanningTime(10.0);
+    pose.header.frame_id = "base";  	
+    pose.pose.position.x = .656;
+    pose.pose.position.y = -.082;
+    pose.pose.position.z = .504;
+    pose.pose.orientation.x = 1;
+    pose.pose.orientation.y = 0;
+    pose.pose.orientation.z = 0;
+    pose.pose.orientation.w = 0.0274;
+    move_group_->setPoseTarget(pose,"right_wrist");
+    int tries = 0;
+    while (!move_group_->move() && (tries < 6))
+      tries += 1;
 
-  bool servo_to_tag()
-  	{
-	  // pose.pose.position.x = tf_transform_.getOrigin().x() + y_correct;
-	  // pose.pose.position.y = tf_transform_.getOrigin().y() + x_correct;
-	  // pose.pose.position.z = z_height;  
-	  // pose.pose.orientation.x = 1;
-	  // pose.pose.orientation.y = 0;
-	  // pose.pose.orientation.z = 0;
-	  // pose.pose.orientation.w = 0.0274;
-	  // move_group_->setPoseTarget(pose,"right_wrist");
-	  // move_group_->move();
-	  // tf_listener_.lookupTransform("/base","/right_hand_camera", ros::Time(0), tf_transform_);
+  }
 
-  	}
+  void pick_up()
+  {
+    open_gripper();
+    move_group_->setPlanningTime(10.0);
+    pose.header.frame_id = "base";  	
+    pose.pose.position.x = 0.656-error_y_;
+    pose.pose.position.y = -0.082-error_x_;
+    pose.pose.position.z = 0.05;
+    pose.pose.orientation.x = 1;
+    pose.pose.orientation.y = 0;
+    pose.pose.orientation.z = 0;
+    pose.pose.orientation.w = 0.0274;
+    move_group_->setPoseTarget(pose,"right_wrist");
+    int tries = 0;
+    while (!move_group_->move() && (tries < 6))
+      tries += 1;
+    close_gripper();
+    goto_home();
+  }
+
+  void close_gripper()
+  {
+	gripper_cmd_.command = baxter_core_msgs::EndEffectorCommand::CMD_GRIP;
+	gripper_pub_.publish(gripper_cmd_);
+  }
+  
+  void open_gripper()
+  {
+	gripper_cmd_.command = baxter_core_msgs::EndEffectorCommand::CMD_RELEASE;
+	gripper_pub_.publish(gripper_cmd_);
+  }
 
   void tracker(const sensor_msgs::ImageConstPtr& msg)
   {
@@ -120,9 +168,9 @@ public:
     const int tube_red_upper = 255;
     const int tube_green_upper = 255;
     const int tube_blue_upper = 255;
-    const int tube_red_lower = 180;
-    const int tube_green_lower = 180;
-    const int tube_blue_lower = 180;
+    const int tube_red_lower = 200;
+    const int tube_green_lower = 200;
+    const int tube_blue_lower = 200;
 
     cv::Mat threshold_cap_mat, threshold_tube_mat, threshold_mat;
     cv::inRange(camera_image->image,cv::Scalar(cap_blue_lower,cap_green_lower,cap_red_lower),cv::Scalar(cap_blue_upper,cap_green_upper,cap_red_upper),threshold_cap_mat);
@@ -152,14 +200,18 @@ public:
     cap_moment = moments(threshold_cap_mat);
     tube_moment = moments(threshold_tube_mat);
     double cap_x,cap_y,tube_x,tube_y,length_x,length_y,theta;
-    cap_x = cap_moment.m10/cap_moment.m00;
-    cap_y = cap_moment.m01/cap_moment.m00;
-    tube_x = tube_moment.m10/tube_moment.m00;
-    tube_y = tube_moment.m01/tube_moment.m00;
+    cap_x = cap_moment.m01/cap_moment.m00;
+    cap_y = cap_moment.m10/cap_moment.m00;
+    tube_x = tube_moment.m01/tube_moment.m00;
+    tube_y = tube_moment.m10/tube_moment.m00;
     length_x = threshold_tube_mat.rows/2;
     length_y = threshold_tube_mat.cols/2;
-    theta = atan2(tube_y-cap_y,tube_x-cap_x);
-    
+    theta = atan2(tube_y-cap_y,tube_x-cap_x);    
+    const double dpp = .00128005616804887;
+    error_y_ = dpp*(length_y-tube_y);
+    error_x_ = dpp*(length_x-tube_x);
+
+    ROS_INFO("x = %f, y =%f \n", error_x_, error_y_);
     // double cap_mass,tube_mass;
     // cap_mass = cap_moment.m00;
     // tube_mass = tube_moment.m00;
