@@ -1,3 +1,8 @@
+// Function to visually servo to a test tube and pick it from a flat table located
+// 30 inches off the ground located in front of the baxter robot.
+
+// Written by Peter Jeffris and Matt Clark at the University of Colorado
+
 #include <ros/ros.h>
 #include <baxter_core_msgs/EndEffectorCommand.h>
 #include <baxter_core_msgs/EndEffectorProperties.h>
@@ -28,7 +33,7 @@ private:
   std::string planning_group_name_;
   std::string hand_camera_;
   std::string camera_image_;
-  moveit_msgs::CollisionObject collision_object_;
+  //  moveit_msgs::CollisionObject collision_object_;
   baxter_core_msgs::EndEffectorCommand gripper_cmd_;
 
   double error_y_;
@@ -50,7 +55,8 @@ public:
   {
     move_group_.reset(new move_group_interface::MoveGroup(planning_group_name_));
     move_group_->setPlanningTime(20.0);
-    move_group_->setPlannerId("KPIECEkConfigDefault");
+    //    move_group_->setPlannerId("KPIECEkConfigDefault");
+    move_group_->setPlannerId("RRTstarkConfigDefault");
     filter_pub_ = transporter_.advertise("Filter", 1);
     camera_image_sub_ = transporter_.subscribe(camera_image_, 1, &VisualServo::tracker, this);
 
@@ -75,20 +81,65 @@ public:
     gripper_pub_.publish(gripper_cmd_);
     ros::Duration(2).sleep();
 
-    //at bottom:
+    // Calibration for pixel to distance conversion
+    // void goto_cal1()
+    // {
+    //   move_group_->setPlanningTime(10.0);
+    //   pose.header.frame_id = "base";  	
+    //   pose.pose.position.x = .73;
+    //   pose.pose.position.y = -.2;
+    //   pose.pose.position.z = .55;
+    //   pose.pose.orientation.x = 1;
+    //   pose.pose.orientation.y = 0;
+    //   pose.pose.orientation.z = 0;
+    //   pose.pose.orientation.w = 0.0274;
+    //   move_group_->setPoseTarget(pose,"right_wrist");
+    //   int tries = 0;
+    //   while (!move_group_->move() && (tries < 6))
+    //     tries += 1;
+    // }
+
+    // void goto_cal2()
+    // {
+    //   move_group_->setPlanningTime(10.0);
+    //   pose.header.frame_id = "base";  	
+    //   pose.pose.position.x = .55;
+    //   pose.pose.position.y = 0;
+    //   pose.pose.position.z = .55;
+    //   pose.pose.orientation.x = 1;
+    //   pose.pose.orientation.y = 0;
+    //   pose.pose.orientation.z = 0;
+    //   pose.pose.orientation.w = 0.0274;
+    //   move_group_->setPoseTarget(pose,"right_wrist");
+    //   int tries = 0;
+    //   while (!move_group_->move() && (tries < 6))
+    //     tries += 1;
+    // }
+
+    // while(ros::ok()){
+    // goto_home();
+    // ros::Duration(5).sleep();
+    // goto_cal1();
+    // ros::Duration(5).sleep();
+    // goto_home();
+    // ros::Duration(5).sleep();
+    // goto_cal2();
+    // ros::Duration(5).sleep();
+    // }
+    //Bottom location
     //Translation: [0.656, -0.082, -0.056]
     //Rotation: in Quaternion [0.765, 0.644, 0.017, 0.019]
     //          in RPY [3.091, -0.001, 1.400]
 
-    //at top:
+    //Top location:
     // Translation: [0.548, -0.080, 0.504]
     // Rotation: in Quaternion [0.733, 0.679, 0.024, 0.022]
     //        in RPY [3.077, -0.006, 1.494]
 
-
     goto_home();
-    pick_up();
     while(ros::ok()){
+     pick_up();
+     ros::Duration(10).sleep();
     }
   }
 
@@ -96,9 +147,9 @@ public:
   {
     move_group_->setPlanningTime(10.0);
     pose.header.frame_id = "base";  	
-    pose.pose.position.x = .656;
-    pose.pose.position.y = -.082;
-    pose.pose.position.z = .504;
+    pose.pose.position.x = .55;
+    pose.pose.position.y = -.2;
+    pose.pose.position.z = .55;
     pose.pose.orientation.x = 1;
     pose.pose.orientation.y = 0;
     pose.pose.orientation.z = 0;
@@ -115,9 +166,9 @@ public:
     open_gripper();
     move_group_->setPlanningTime(10.0);
     pose.header.frame_id = "base";  	
-    pose.pose.position.x = 0.656-error_y_;
-    pose.pose.position.y = -0.082-error_x_;
-    pose.pose.position.z = 0.05;
+    pose.pose.position.x = .55-error_x_;
+    pose.pose.position.y = -.2-error_y_;
+    pose.pose.position.z = 0.15;
     pose.pose.orientation.x = 1;
     pose.pose.orientation.y = 0;
     pose.pose.orientation.z = 0;
@@ -128,6 +179,7 @@ public:
       tries += 1;
     close_gripper();
     goto_home();
+    open_gripper();
   }
 
   void close_gripper()
@@ -160,26 +212,26 @@ public:
     // white limits - lower:r = 217, g = 229, b=216 upper: g=g=b=255
     // red limits - lower:r = 148, g = 62, b=61 upper: r = 239, b = 122, g = 140
     const int cap_red_upper = 255;
-    const int cap_green_upper = 140;
-    const int cap_blue_upper = 120;
-    const int cap_red_lower = 130;
-    const int cap_green_lower = 50;
-    const int cap_blue_lower = 50;
+    const int cap_green_upper = 130;
+    const int cap_blue_upper = 130;
+    const int cap_red_lower = 150;
+    const int cap_green_lower = 70;
+    const int cap_blue_lower = 70;
     const int tube_red_upper = 255;
     const int tube_green_upper = 255;
     const int tube_blue_upper = 255;
-    const int tube_red_lower = 200;
-    const int tube_green_lower = 200;
-    const int tube_blue_lower = 200;
+    const int tube_red_lower = 230;
+    const int tube_green_lower = 230;
+    const int tube_blue_lower = 230;
 
     cv::Mat threshold_cap_mat, threshold_tube_mat, threshold_mat;
     cv::inRange(camera_image->image,cv::Scalar(cap_blue_lower,cap_green_lower,cap_red_lower),cv::Scalar(cap_blue_upper,cap_green_upper,cap_red_upper),threshold_cap_mat);
 
     cv::inRange(camera_image->image,cv::Scalar(tube_blue_lower,tube_green_lower,tube_red_lower),cv::Scalar(tube_blue_upper,tube_green_upper,tube_red_upper),threshold_tube_mat);
 
-    // cv::imshow("Cap Image",threshold_cap_mat);
-    // cv::imshow("Tube Image",threshold_tube_mat);
-    // cv::waitKey(3);
+    cv::imshow("Cap Image",threshold_cap_mat);
+    cv::imshow("Tube Image",threshold_tube_mat);
+    cv::waitKey(3);
 
     std::vector<cv::Mat> image_channels;
     cv::split(camera_image->image,image_channels);
@@ -200,18 +252,21 @@ public:
     cap_moment = moments(threshold_cap_mat);
     tube_moment = moments(threshold_tube_mat);
     double cap_x,cap_y,tube_x,tube_y,length_x,length_y,theta;
-    cap_x = cap_moment.m01/cap_moment.m00;
-    cap_y = cap_moment.m10/cap_moment.m00;
+    cap_y = cap_moment.m01/cap_moment.m00;
+    cap_x = cap_moment.m10/cap_moment.m00;
     tube_x = tube_moment.m01/tube_moment.m00;
     tube_y = tube_moment.m10/tube_moment.m00;
     length_x = threshold_tube_mat.rows/2;
     length_y = threshold_tube_mat.cols/2;
     theta = atan2(tube_y-cap_y,tube_x-cap_x);    
-    const double dpp = .00128005616804887;
-    error_y_ = dpp*(length_y-tube_y);
-    error_x_ = dpp*(length_x-tube_x);
+    const double dpp = 0.0012;//.00147;
+    error_y_ = length_y-tube_y;
+    error_x_ = length_x-tube_x;
 
-    ROS_INFO("x = %f, y =%f \n", error_x_, error_y_);
+    //    std::cout << error_x_ << "," << error_y_ << "," ;
+    error_y_ *= dpp;
+    error_x_ *= dpp;
+    std::cout << error_x_ << ", " << error_y_ << ", " << tube_y-cap_y << ',' << tube_x-cap_x << ',' << theta*180/3.14159 << std::endl;
     // double cap_mass,tube_mass;
     // cap_mass = cap_moment.m00;
     // tube_mass = tube_moment.m00;
